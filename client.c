@@ -9,8 +9,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <time.h>
+#include <pthread.h>
 
-#define modulo 128
+#define BUFFER_SIZE 200
+#define MODULO 128
+#define NAME_SIZE 20
+
+//error
 
 void error(const char *msg)
 {
@@ -19,12 +24,27 @@ void error(const char *msg)
     exit(0);
 }
 
+// remove  from string
+
+void string_trimln(char* message) 
+{
+    int i;
+    for (i = 0; i < strlen(message); i++) 
+    { // trim \n
+        if (message[i] == '\n') 
+        {
+            message[i] = '\0';
+            break;
+        }
+    }
+}
+
 // generate private key
 
 uint8_t generate_private_key()
 {
     srand(time(0));
-    uint8_t private_key = rand()%modulo;
+    uint8_t private_key = rand() % MODULO;
     return private_key;
 }
 
@@ -32,7 +52,7 @@ uint8_t generate_private_key()
 
 uint8_t generate_public_key(uint8_t private_key)
 {
-    uint8_t public_key = modulo - private_key;
+    uint8_t public_key = MODULO - private_key;
     return public_key;
 }
 
@@ -46,7 +66,7 @@ char* encrypt(uint8_t public_key,char* message)
     strcpy(temp, message);
 
     for (int i=0;i<n;i++){
-        char c = (temp[i] + public_key) % modulo;
+        char c = (temp[i] + public_key) % MODULO;
         temp[i]=c;
     }
     //printf("Encrypted message=%s\n",temp);
@@ -61,20 +81,71 @@ void decrypt(uint8_t private_key,char* message)
     int n = strlen(message);
 
     for (int i=0;i<n;i++){
-        char c = (message[i] + private_key) % modulo;
+        char c = (message[i] + private_key) % MODULO;
         message[i]=c;
     }
     //printf("message after decryption=%s\n",message);
+}
+
+// global variables
+
+char name[NAME_SIZE];
+int sockfd = 0;
+
+// function for sending message
+void str_overwrite_stdout() 
+{
+    printf("%s", ">");
+    fflush(stdout);
+}
+
+void *send_message() 
+{
+    char message[BUFFER_SIZE];
+	char buffer[BUFFER_SIZE + NAME_SIZE + 4];
+
+    while(1) 
+    {
+
+        bzero(message,BUFFER_SIZE);
+        bzero(buffer,BUFFER_SIZE + NAME_SIZE + 4 );
+        str_overwrite_stdout();
+        fgets(message,BUFFER_SIZE, stdin);
+        string_trimln(message);
+
+        sprintf(buffer, "%s : %s", name, message);
+        //printf("\nEntered message = %s",buffer);
+        write(sockfd,buffer,strlen(buffer));
+    }
+}
+
+// function for receiving message
+
+void *recieve_message() 
+{
+	char message[BUFFER_SIZE];
+    while (1) 
+    {
+        bzero(message, BUFFER_SIZE);
+
+        int n = read( sockfd, message, BUFFER_SIZE );
+        if (n < 0)
+            error("ERROR reading from socket"); 
+
+        //printf("Message received");
+        printf("%s\n", message); 
+        str_overwrite_stdout();
+    }
 }
 
 // main funtion
 
 int main(int argc, char *argv[])
 {
-    int sockfd, portno, n;
+    int portno, n;
     struct sockaddr_in serv_addr;
     struct hostent *server;
-    char buffer[100],client_name[20],server_name[20];
+    char buffer[100];
     char end[]="end connection";
     if (argc < 3) 
     {
@@ -89,6 +160,7 @@ int main(int argc, char *argv[])
     if (sockfd < 0)
         error("ERROR opening socket");
     server = gethostbyname(argv[1]);
+
     if (server == NULL) 
     {
         fprintf(stderr,"ERROR, no such host\n");
@@ -108,16 +180,33 @@ int main(int argc, char *argv[])
 
     if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0)
         error("ERROR connecting");
-    else{printf("\nConnected to server successfully.Say hi to server to start\n");}
+    else{printf("\nEntered Chat Room successfully\n");}
 
     // enter your user name
 
     printf("Enter your username : ");
-    fgets(client_name,20,stdin);
-    char* first_newline = strchr(client_name, '\n');
-    if (first_newline)
-      *first_newline = '\0';
+    fgets(name,NAME_SIZE,stdin);
+    string_trimln(name);
     
+    n = write(sockfd,name,strlen(name));
+    if (n < 0)
+    	error("ERROR: writing to socket");
+
+	pthread_t send_message_thread;
+    pthread_t recieve_message_thread;
+
+    pthread_create(&send_message_thread, NULL, &send_message, NULL);
+    pthread_create(&recieve_message_thread, NULL, &recieve_message, NULL);
+
+    pthread_join(send_message_thread,NULL);
+    pthread_join(recieve_message_thread,NULL);
+
+	close(sockfd);
+
+	return 0;
+}
+
+/*
     // generate private key
 
     uint8_t private_key= generate_private_key();
@@ -199,3 +288,4 @@ int main(int argc, char *argv[])
     close(sockfd);
     return 0;
 }
+*/
