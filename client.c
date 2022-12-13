@@ -28,15 +28,9 @@ void error(const char *msg)
 
 void string_trimln(char* message) 
 {
-    int i;
-    for (i = 0; i < strlen(message); i++) 
-    { // trim \n
-        if (message[i] == '\n') 
-        {
-            message[i] = '\0';
-            break;
-        }
-    }
+    char* first_newline = strchr(message, '\n');
+    if (first_newline)
+        *first_newline = '\0';
 }
 
 // generate private key
@@ -91,6 +85,7 @@ void decrypt(uint8_t private_key,char* message)
 
 char name[NAME_SIZE];
 int sockfd = 0;
+pthread_t tmp_thread;
 
 // function for sending message
 void str_overwrite_stdout() 
@@ -113,6 +108,16 @@ void *send_message()
         fgets(message,BUFFER_SIZE, stdin);
         string_trimln(message);
 
+        int i = strncmp("exit",message,4);
+        if(i==0)
+        {
+            write(sockfd,message,strlen(message));
+            pthread_cancel(tmp_thread);
+            pthread_exit(NULL);
+            break;
+        }
+            
+
         sprintf(buffer, "%s : %s", name, message);
         //printf("\nEntered message = %s",buffer);
         write(sockfd,buffer,strlen(buffer));
@@ -124,6 +129,7 @@ void *send_message()
 void *recieve_message() 
 {
 	char message[BUFFER_SIZE];
+    tmp_thread = pthread_self();
     while (1) 
     {
         bzero(message, BUFFER_SIZE);

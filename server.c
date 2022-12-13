@@ -106,15 +106,9 @@ void print_client_addr(struct sockaddr_in addr)
 
 void string_trimln(char* message) 
 {
-    int i;
-    for (i = 0; i < strlen(message); i++) 
-    { // trim \n
-        if (message[i] == '\n') 
-        {
-            message[i] = '\0';
-            break;
-        }
-    }
+    char* first_newline = strchr(message, '\n');
+    if (first_newline)
+        *first_newline = '\0';
 }
 
 // add client to queue
@@ -214,16 +208,17 @@ void *handle_client(void *arg)
 
         int e = strncmp( "exit",buffer,4);
 
-        if( strlen(buffer) > 0 )
+        if( e!=0 && strlen(buffer) > 0 )
         {
+            printf("\n%s", buffer);
             send_message(buffer, client_structure->uid);
-            printf("%s\n", buffer);
         }
 		else if ( e == 0 ) 
         {
 			sprintf(buffer, "%s has left", client_structure->name);
 			printf("\n%s", buffer );
 			send_message(buffer, client_structure->uid);
+            break;
 		} 
 	}
 
@@ -278,7 +273,7 @@ int main(int argc, char *argv[])
 
      listen(sockfd,10);
 
-     printf(" Chat room started \n");
+     printf("\n*********Chat room started*********\n");
 
      while(1)
      {
@@ -308,6 +303,7 @@ int main(int argc, char *argv[])
 
 		queue_add(client_structure);
 		pthread_create(&tid, NULL, &handle_client, (void*)client_structure);
+
 
 		/* Reduce CPU usage */
 		sleep(1);
