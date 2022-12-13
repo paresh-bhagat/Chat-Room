@@ -24,24 +24,16 @@ void error(const char *msg)
     exit(1);
 }
 
-// generate private key
-
-uint8_t generate_private_key()
-{
-    srand(time(0));
-    uint8_t private_key = rand()%MODULO;
-    return private_key;
-}
-
 // generate public key
 
-uint8_t generate_public_key(uint8_t private_key)
+uint8_t generate_public_key()
 {
-    uint8_t public_key = MODULO - private_key;
+    srand(time(0));
+    uint8_t public_key = rand()%MODULO;
     return public_key;
 }
 
-// Encrypt function for messages
+// Encrypt function 
 
 char* encrypt(uint8_t public_key,char* message)
 {
@@ -56,21 +48,6 @@ char* encrypt(uint8_t public_key,char* message)
     }
     //printf("Encrypted message=%s\n",temp);
     return (char *)temp;
-
-}
-
-// Decrypt funtion for messsages
-
-void decrypt(uint8_t private_key,char* message)
-{
-    //printf("message to de deccrypted=%s\n",message);
-    int n = strlen(message);
-
-    for (int i=0;i<n;i++){
-        char c = (message[i] + private_key) % MODULO;
-        message[i]=c;
-    }
-    //printf("message after decryption=%s\n",message);
 }
 
 // Client structure 
@@ -90,6 +67,7 @@ client_t *clients[MAX_CLIENTS];
 static _Atomic unsigned int cli_count = 0;
 static int uid = 10;
 pthread_mutex_t clients_mutex = PTHREAD_MUTEX_INITIALIZER;
+uint8_t public_key;
 
 // print ip address
 
@@ -180,23 +158,31 @@ void *handle_client(void *arg)
 	char buffer[BUFFER_SIZE];
 	char name[NAME_SIZE];
     int n;
+    char *encrypted_message;
 
 	cli_count++;
 	client_t *client_structure = (client_t *)arg;
 
+    // send public_key to client
+
+    n = write( client_structure->sockfd ,&public_key,sizeof(uint8_t));
+    if (n < 0)
+        error("ERROR writing to socket");
+
 	// Read name of client
 
     n = read( client_structure->sockfd, name , NAME_SIZE);
-    //decrypt(private_key,client_name); 
     if (n < 0)
         error("ERROR reading from socket");
-	
     string_trimln(name);
 
 	strcpy(client_structure->name, name);
 	sprintf(buffer, "%s has joined", client_structure->name);
+
 	printf("\n%s", buffer );
-	send_message(buffer, client_structure->uid);
+
+    encrypted_message = encrypt(public_key,buffer);
+	send_message(encrypted_message, client_structure->uid);
 
 	while(1)
     {
@@ -210,14 +196,15 @@ void *handle_client(void *arg)
 
         if( e!=0 && strlen(buffer) > 0 )
         {
-            printf("\n%s", buffer);
+            // printf("\n%s", buffer);
             send_message(buffer, client_structure->uid);
         }
 		else if ( e == 0 ) 
         {
 			sprintf(buffer, "%s has left", client_structure->name);
 			printf("\n%s", buffer );
-			send_message(buffer, client_structure->uid);
+            encrypted_message = encrypt(public_key,buffer);
+			send_message( encrypted_message, client_structure->uid);
             break;
 		} 
 	}
@@ -273,6 +260,8 @@ int main(int argc, char *argv[])
 
      listen(sockfd,10);
 
+     public_key = generate_public_key();
+
      printf("\n*********Chat room started*********\n");
 
      while(1)
@@ -285,7 +274,7 @@ int main(int argc, char *argv[])
      	if (newsockfd < 0)
         	error("ERROR on accept");
      	else
-        	printf("Received connection from host [IP %s TCP port %d] \n",inet_ntoa(cli_addr.sin_addr),ntohs(cli_addr.sin_port));
+        	printf("\nReceived connection from host [IP %s TCP port %d] \n",inet_ntoa(cli_addr.sin_addr),ntohs(cli_addr.sin_port));
 
         if((cli_count + 1) == MAX_CLIENTS){
 			printf("Max clients reached. Rejected: ");

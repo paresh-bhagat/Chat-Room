@@ -24,7 +24,7 @@ void error(const char *msg)
     exit(0);
 }
 
-// remove  from string
+// remove from string
 
 void string_trimln(char* message) 
 {
@@ -35,19 +35,10 @@ void string_trimln(char* message)
 
 // generate private key
 
-uint8_t generate_private_key()
+uint8_t generate_private_key(uint8_t public_key)
 {
-    srand(time(0));
-    uint8_t private_key = rand() % MODULO;
-    return private_key;
-}
-
-// generate public key
-
-uint8_t generate_public_key(uint8_t private_key)
-{
-    uint8_t public_key = MODULO - private_key;
-    return public_key;
+    uint8_t key = MODULO - public_key;
+    return key;
 }
 
 // Encrypt function for messages
@@ -86,6 +77,8 @@ void decrypt(uint8_t private_key,char* message)
 char name[NAME_SIZE];
 int sockfd = 0;
 pthread_t tmp_thread;
+uint8_t public_key;
+uint8_t private_key;
 
 // function for sending message
 void str_overwrite_stdout() 
@@ -96,8 +89,10 @@ void str_overwrite_stdout()
 
 void *send_message() 
 {
+
     char message[BUFFER_SIZE];
 	char buffer[BUFFER_SIZE + NAME_SIZE + 4];
+    char *encrypted_message;
 
     while(1) 
     {
@@ -120,7 +115,13 @@ void *send_message()
 
         sprintf(buffer, "%s : %s", name, message);
         //printf("\nEntered message = %s",buffer);
-        write(sockfd,buffer,strlen(buffer));
+
+        //encrypt message
+        encrypted_message = encrypt(public_key,buffer);
+        int n = write(sockfd,encrypted_message,strlen(encrypted_message));
+        if (n < 0)
+    	    error("ERROR writing to socket");
+
     }
 }
 
@@ -130,13 +131,20 @@ void *recieve_message()
 {
 	char message[BUFFER_SIZE];
     tmp_thread = pthread_self();
+
     while (1) 
     {
         bzero(message, BUFFER_SIZE);
 
+        // read message
+
         int n = read( sockfd, message, BUFFER_SIZE );
         if (n < 0)
             error("ERROR reading from socket"); 
+
+        // decrypt
+
+        decrypt(private_key,message); 
 
         //printf("Message received");
         printf("%s\n", message); 
@@ -188,15 +196,26 @@ int main(int argc, char *argv[])
         error("ERROR connecting");
     else{printf("\nEntered Chat Room successfully\n");}
 
+    // read public key
+   
+    n = read(sockfd,&public_key,sizeof(uint8_t));
+    if (n < 0)
+        error("ERROR writing to socket");
+
+    // generate private key
+
+    private_key = generate_private_key(public_key);
+
     // enter your user name
 
     printf("Enter your username : ");
     fgets(name,NAME_SIZE,stdin);
     string_trimln(name);
     
+    //send name
     n = write(sockfd,name,strlen(name));
     if (n < 0)
-    	error("ERROR: writing to socket");
+    	error("ERROR writing to socket");
 
 	pthread_t send_message_thread;
     pthread_t recieve_message_thread;
@@ -211,87 +230,3 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
-
-/*
-    // generate private key
-
-    uint8_t private_key= generate_private_key();
-
-    // generate public key
-
-    uint8_t public_key = generate_public_key(private_key);
-
-    // send public key to server
-
-    n = write(sockfd,&public_key,sizeof(uint8_t));
-    if (n < 0)
-        error("ERROR writing to socket");
-
-    // get public key from server
-
-    uint8_t public_key_server;
-    n = read(sockfd,&public_key_server,sizeof(uint8_t));
-    if (n < 0)
-        error("ERROR writing to socket");
-    
-    // send username to server
-
-    char *encrypted_message;
-    encrypted_message = encrypt(public_key_server,client_name);
-    n = write(sockfd,encrypted_message,strlen(encrypted_message));
-    if (n < 0)
-    	error("ERROR writing to socket");
-    
-    // read server name
-
-    n = read(sockfd, server_name, 20);
-    decrypt(private_key,server_name); 
-    if (n < 0)
-        error("ERROR reading from socket"); 
-    printf("\nStart chat...\n");
-    
-    // send and receive data from server
-
-    while(1)
-    {
-        // clean buffer
-
-    	bzero(buffer,100);
-
-        // print on screen and type messsage
-
-    	printf("%s : ",client_name);
-    	fgets(buffer,100,stdin);
-        char* first_newline = strchr(buffer, '\n');
-        if (first_newline)
-            *first_newline = '\0';
-
-        // send message to server
-        char *encrypted_message;
-        encrypted_message = encrypt(public_key_server,buffer);
-    	n=write(sockfd,encrypted_message,strlen(encrypted_message));
-    	if (n < 0)
-    		error("ERROR writing to socket");
-
-        // check for condition for exit
-    	int i = strncmp("Bye",buffer,3);
-        if(i==0)
-            break;
-        
-        // read message from server and decrpyt
-    	bzero(buffer,100);
-     	n=read(sockfd,buffer,100);
-     	if (n < 0)
-        	error("ERROR reading from socket"); 
-        decrypt(private_key,buffer); 
-
-        // print on screen
-
-        printf("%s : %s\n",server_name, buffer);
-        
-    }  
-    printf("\nClosing connection from Server\n");
-    close(sockfd);
-    return 0;
-}
-*/
