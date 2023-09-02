@@ -5,7 +5,7 @@ A multiple client Chat Room application using Socket Programming in C. It uses c
 ## Tags
 C programming, Socket programming, Multithreading in C using pthread Library, E2EE
 
-## Demo
+## How to run?
 
 To compile server.c and client.c
 
@@ -26,3 +26,7 @@ To execute the client process, the IP address and PORT number of server is to be
 ```
 
 Choose a username of your choice and start sending messages in the chatroom.
+
+## Images
+
+![cr](chatroom.png)
